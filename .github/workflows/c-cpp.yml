@@ -1,0 +1,28 @@
+name: C/C++ CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: mkdir build
+      run: cmake -B build
+    # 配置CMake（指定源代码目录和构建目录）  
+    - name: Configure CMake  
+      shell: bash  
+      working-directory: ${{github.workspace}}/build  
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=Release  
+  
+    # 使用CMake构建项目  
+    - name: Build  
+      shell: bash  
+      working-directory: ${{github.workspace}}/build  
+      run: cmake --build . --config Release  
