@@ -44,8 +44,6 @@ enum GameState_t
 
 static constexpr int32_t PLAYER_NAME_LENGTH = 25;
 
-static constexpr int32_t EVENT_LIGHTINTERVAL = 10000;
-static constexpr int32_t EVENT_WORLDTIMEINTERVAL = 2500;
 static constexpr int32_t EVENT_DECAYINTERVAL = 250;
 static constexpr int32_t EVENT_DECAY_BUCKETS = 4;
 
@@ -73,7 +71,6 @@ class Game
 {
 public:
 	Game();
-	~Game();
 
 	// non-copyable
 	Game(const Game&) = delete;
@@ -298,7 +295,6 @@ public:
 
 	void sendGuildMotd(uint32_t playerId);
 	void kickPlayer(uint32_t playerId, bool displayEffect);
-	void playerReportBug(uint32_t playerId, const std::string& message, const Position& position, uint8_t category);
 	void playerDebugAssert(uint32_t playerId, const std::string& assertLine, const std::string& date,
 	                       const std::string& description, const std::string& comment);
 	void playerAnswerModalWindow(uint32_t playerId, uint32_t modalWindowId, uint8_t button, uint8_t choice);
@@ -428,7 +424,6 @@ public:
 	void updateCreatureWalk(uint32_t creatureId);
 	void checkCreatureAttack(uint32_t creatureId);
 	void checkCreatures(size_t index);
-	void checkLight();
 
 	bool combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* target, bool checkDefense, bool checkArmor,
 	                    bool field, bool ignoreResistances = false);
@@ -464,8 +459,8 @@ public:
 	void addMonster(Monster* monster);
 	void removeMonster(Monster* monster);
 
-	Guild* getGuild(uint32_t id) const;
-	void addGuild(Guild* guild);
+	Guild_ptr getGuild(uint32_t id) const;
+	void addGuild(Guild_ptr guild);
 	void removeGuild(uint32_t guildId);
 	void decreaseBrowseFieldRef(const Position& pos);
 
@@ -510,7 +505,7 @@ private:
 	std::unordered_map<uint32_t, Player*> players;
 	std::unordered_map<std::string, Player*> mappedPlayerNames;
 	std::unordered_map<uint32_t, Player*> mappedPlayerGuids;
-	std::unordered_map<uint32_t, Guild*> guilds;
+	std::unordered_map<uint32_t, Guild_ptr> guilds;
 	std::unordered_map<uint16_t, Item*> uniqueItems;
 
 	std::list<Item*> decayItems[EVENT_DECAY_BUCKETS];

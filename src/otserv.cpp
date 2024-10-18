@@ -9,8 +9,10 @@
 #include "databasemanager.h"
 #include "databasetasks.h"
 #include "game.h"
+#include "http/http.h"
 #include "iomarket.h"
 #include "monsters.h"
+#include "npc.h"
 #include "outfit.h"
 #include "protocollogin.h"
 #include "protocolold.h"
@@ -137,7 +139,7 @@ void mainLoader(ServiceManager* services)
 
 	// load vocations
 	std::cout << ">> Loading vocations" << std::endl;
-	if (!g_vocations.loadFromXml()) {
+	if (std::ifstream is{"data/XML/vocations.xml"}; !g_vocations.loadFromXml(is, "data/XML/vocations.xml")) {
 		startupErrorMessage("Unable to load vocations!");
 		return;
 	}
@@ -176,8 +178,14 @@ void mainLoader(ServiceManager* services)
 	}
 
 	std::cout << ">> Loading lua monsters" << std::endl;
-	if (!g_scripts->loadScripts("monster", false, false)) {
+	if (!g_scripts->loadScripts("monster/lua", false, false)) {
 		startupErrorMessage("Failed to load lua monsters");
+		return;
+	}
+
+	std::cout << ">> Loading lua npcs" << std::endl;
+	if (!Npcs::loadNpcs(false)) {
+		startupErrorMessage("Failed to load lua npcs");
 		return;
 	}
 
@@ -222,6 +230,10 @@ void mainLoader(ServiceManager* services)
 
 	// Legacy login protocol
 	services->add<ProtocolOld>(static_cast<uint16_t>(getNumber(ConfigManager::LOGIN_PORT)));
+
+	// HTTP server
+	tfs::http::start(getString(ConfigManager::IP), getNumber(ConfigManager::HTTP_PORT),
+	                 getNumber(ConfigManager::HTTP_WORKERS));
 
 	RentPeriod_t rentPeriod;
 	std::string strRentPeriod = boost::algorithm::to_lower_copy(getString(ConfigManager::HOUSE_RENT_PERIOD));

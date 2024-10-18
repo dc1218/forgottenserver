@@ -11,12 +11,12 @@
 #include "server.h"
 #include "tasks.h"
 
-Connection_ptr ConnectionManager::createConnection(boost::asio::io_service& io_service,
+Connection_ptr ConnectionManager::createConnection(boost::asio::io_context& io_context,
                                                    ConstServicePort_ptr servicePort)
 {
 	std::lock_guard<std::mutex> lockClass(connectionManagerLock);
 
-	auto connection = std::make_shared<Connection>(io_service, servicePort);
+	auto connection = std::make_shared<Connection>(io_context, servicePort);
 	connections.insert(connection);
 	return connection;
 }
@@ -44,6 +44,14 @@ void ConnectionManager::closeAll()
 }
 
 // Connection
+
+Connection::Connection(boost::asio::io_context& io_context, ConstServicePort_ptr service_port) :
+    readTimer(io_context),
+    writeTimer(io_context),
+    service_port(std::move(service_port)),
+    socket(io_context),
+    timeConnected(time(nullptr))
+{}
 
 void Connection::close(bool force)
 {
@@ -103,7 +111,7 @@ void Connection::accept()
 	}
 
 	try {
-		readTimer.expires_from_now(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
+		readTimer.expires_after(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
 		readTimer.async_wait(
 		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const boost::system::error_code& error) {
 			    Connection::handleTimeout(thisPtr, error);
@@ -181,7 +189,7 @@ void Connection::parseHeader(const boost::system::error_code& error)
 	}
 
 	try {
-		readTimer.expires_from_now(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
+		readTimer.expires_after(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
 		readTimer.async_wait(
 		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const boost::system::error_code& error) {
 			    Connection::handleTimeout(thisPtr, error);
@@ -241,7 +249,7 @@ void Connection::parsePacket(const boost::system::error_code& error)
 	}
 
 	try {
-		readTimer.expires_from_now(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
+		readTimer.expires_after(std::chrono::seconds(CONNECTION_READ_TIMEOUT));
 		readTimer.async_wait(
 		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const boost::system::error_code& error) {
 			    Connection::handleTimeout(thisPtr, error);
@@ -269,7 +277,14 @@ void Connection::send(const OutputMessage_ptr& msg)
 	bool noPendingWrite = messageQueue.empty();
 	messageQueue.emplace_back(msg);
 	if (noPendingWrite) {
-		internalSend(msg);
+		try {
+			boost::asio::post(socket.get_executor(),
+			                  [thisPtr = shared_from_this(), msg] { thisPtr->internalSend(msg); });
+		} catch (const boost::system::system_error& e) {
+			std::cout << "[Network error - Connection::send] " << e.what() << std::endl;
+			messageQueue.clear();
+			close(FORCE_CLOSE);
+		}
 	}
 }
 
@@ -277,7 +292,7 @@ void Connection::internalSend(const OutputMessage_ptr& msg)
 {
 	protocol->onSendMessage(msg);
 	try {
-		writeTimer.expires_from_now(std::chrono::seconds(CONNECTION_WRITE_TIMEOUT));
+		writeTimer.expires_after(std::chrono::seconds(CONNECTION_WRITE_TIMEOUT));
 		writeTimer.async_wait(
 		    [thisPtr = std::weak_ptr<Connection>(shared_from_this())](const boost::system::error_code& error) {
 			    Connection::handleTimeout(thisPtr, error);

@@ -15,6 +15,7 @@
 #include "events.h"
 #include "globalevent.h"
 #include "housetile.h"
+#include "http/http.h"
 #include "inbox.h"
 #include "iologindata.h"
 #include "iomarket.h"
@@ -59,13 +60,6 @@ Game::Game()
 	offlineTrainingWindow.buttons.emplace_back("Okay", offlineTrainingWindow.defaultEnterButton);
 	offlineTrainingWindow.buttons.emplace_back("Cancel", offlineTrainingWindow.defaultEscapeButton);
 	offlineTrainingWindow.priority = true;
-}
-
-Game::~Game()
-{
-	for (const auto& it : guilds) {
-		delete it.second;
-	}
 }
 
 void Game::start(ServiceManager* manager)
@@ -124,6 +118,7 @@ void Game::setGameState(GameState_t newState)
 			g_scheduler.stop();
 			g_databaseTasks.stop();
 			g_dispatcher.stop();
+			tfs::http::stop();
 			break;
 		}
 
@@ -1377,9 +1372,11 @@ ReturnValue Game::internalAddItem(Cylinder* toCylinder, Item* item, int32_t inde
 	}
 
 	if (item->getDuration() > 0) {
-		item->incrementReferenceCounter();
-		item->setDecaying(DECAYING_TRUE);
-		toDecayItems.push_front(item);
+		if (item->getDecaying() != DECAYING_TRUE) {
+			item->incrementReferenceCounter();
+			item->setDecaying(DECAYING_TRUE);
+			toDecayItems.push_front(item);
+		}
 	}
 
 	return RETURNVALUE_NOERROR;
@@ -3173,7 +3170,7 @@ void Game::playerLookAt(uint32_t playerId, const Position& pos, uint8_t stackPos
 
 	int32_t lookDistance = -1;
 	if (thing != player) {
-		lookDistance = std::max(playerPos.getDistanceX(thingPos), thingPos.getDistanceY(playerPos));
+		lookDistance = std::max(playerPos.getDistanceX(thingPos), playerPos.getDistanceY(thingPos));
 		if (playerPos.z != thingPos.z) {
 			lookDistance += 15;
 		}
@@ -5066,8 +5063,7 @@ void Game::sendGuildMotd(uint32_t playerId)
 		return;
 	}
 
-	Guild* guild = player->getGuild();
-	if (guild) {
+	if (const auto& guild = player->getGuild()) {
 		player->sendChannelMessage("Message of the Day", guild->getMotd(), TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
 	}
 }
@@ -5091,16 +5087,6 @@ void Game::playerReportRuleViolation(uint32_t playerId, const std::string& targe
 	}
 
 	g_events->eventPlayerOnReportRuleViolation(player, targetName, reportType, reportReason, comment, translation);
-}
-
-void Game::playerReportBug(uint32_t playerId, const std::string& message, const Position& position, uint8_t category)
-{
-	Player* player = getPlayerByID(playerId);
-	if (!player) {
-		return;
-	}
-
-	g_events->eventPlayerOnReportBug(player, message, position, category);
 }
 
 void Game::playerDebugAssert(uint32_t playerId, const std::string& assertLine, const std::string& date,
@@ -5702,7 +5688,7 @@ void Game::addMonster(Monster* monster) { monsters[monster->getID()] = monster; 
 
 void Game::removeMonster(Monster* monster) { monsters.erase(monster->getID()); }
 
-Guild* Game::getGuild(uint32_t id) const
+Guild_ptr Game::getGuild(uint32_t id) const
 {
 	auto it = guilds.find(id);
 	if (it == guilds.end()) {
@@ -5711,7 +5697,7 @@ Guild* Game::getGuild(uint32_t id) const
 	return it->second;
 }
 
-void Game::addGuild(Guild* guild) { guilds[guild->getId()] = guild; }
+void Game::addGuild(Guild_ptr guild) { guilds[guild->getId()] = guild; }
 
 void Game::removeGuild(uint32_t guildId) { guilds.erase(guildId); }
 
@@ -5840,6 +5826,7 @@ bool Game::reload(ReloadTypes_t reloadType)
 			return g_moveEvents->reload();
 		case RELOAD_TYPE_NPCS: {
 			Npcs::reload();
+			Npcs::loadNpcs(true);
 			return true;
 		}
 

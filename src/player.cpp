@@ -2000,7 +2000,7 @@ BlockType_t Player::blockHit(Creature* attacker, CombatType_t combatType, int32_
 
 			const int16_t& absorbPercent = it.abilities->absorbPercent[combatIndex];
 			if (absorbPercent != 0) {
-				damage -= std::round(damage * (absorbPercent / 100.));
+				damage -= std::ceil(damage * (absorbPercent / 100.));
 
 				uint16_t charges = item->getCharges();
 				if (charges != 0) {
@@ -2013,7 +2013,7 @@ BlockType_t Player::blockHit(Creature* attacker, CombatType_t combatType, int32_
 			if (field) {
 				const int16_t& fieldAbsorbPercent = it.abilities->fieldAbsorbPercent[combatIndex];
 				if (fieldAbsorbPercent != 0) {
-					damage -= std::round(damage * (fieldAbsorbPercent / 100.));
+					damage -= std::ceil(damage * (fieldAbsorbPercent / 100.));
 
 					uint16_t charges = item->getCharges();
 					if (charges != 0) {
@@ -3005,23 +3005,39 @@ size_t Player::getFirstIndex() const { return CONST_SLOT_FIRST; }
 
 size_t Player::getLastIndex() const { return CONST_SLOT_LAST + 1; }
 
-uint32_t Player::getItemTypeCount(uint16_t itemId, int32_t subType /*= -1*/) const
+uint32_t Player::getItemTypeCount(uint16_t itemId, int32_t subType /*= -1*/, bool ignoreEquipped /*= false*/) const
 {
 	uint32_t count = 0;
-	for (int32_t i = CONST_SLOT_FIRST; i <= CONST_SLOT_LAST; i++) {
-		Item* item = inventory[i];
-		if (!item) {
-			continue;
-		}
 
-		if (item->getID() == itemId) {
-			count += Item::countByType(item, subType);
+	if (ignoreEquipped) {
+		Item* item = inventory[CONST_SLOT_BACKPACK];
+		if (!item) {
+			return 0;
 		}
 
 		if (Container* container = item->getContainer()) {
 			for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
 				if ((*it)->getID() == itemId) {
 					count += Item::countByType(*it, subType);
+				}
+			}
+		}
+	} else {
+		for (int32_t i = CONST_SLOT_FIRST; i <= CONST_SLOT_LAST; i++) {
+			Item* item = inventory[i];
+			if (!item) {
+				continue;
+			}
+
+			if (item->getID() == itemId) {
+				count += Item::countByType(item, subType);
+			}
+
+			if (Container* container = item->getContainer()) {
+				for (ContainerIterator it = container->iterator(); it.hasNext(); it.advance()) {
+					if ((*it)->getID() == itemId) {
+						count += Item::countByType(*it, subType);
+					}
 				}
 			}
 		}
@@ -3394,7 +3410,8 @@ void Player::doAttacking(uint32_t)
 		if (!classicSpeed) {
 			setNextActionTask(task, false);
 		} else {
-			g_scheduler.addEvent(task);
+			g_scheduler.stopEvent(classicAttackEvent);
+			classicAttackEvent = g_scheduler.addEvent(task);
 		}
 
 		if (result) {
@@ -4113,7 +4130,7 @@ bool Player::isInWar(const Player* player) const
 		return false;
 	}
 
-	const Guild* playerGuild = player->getGuild();
+	const auto& playerGuild = player->getGuild();
 	if (!playerGuild) {
 		return false;
 	}
@@ -4254,7 +4271,7 @@ GuildEmblems_t Player::getGuildEmblem(const Player* player) const
 		return GUILDEMBLEM_NONE;
 	}
 
-	const Guild* playerGuild = player->getGuild();
+	const auto& playerGuild = player->getGuild();
 	if (!playerGuild) {
 		return GUILDEMBLEM_NONE;
 	}
@@ -4665,20 +4682,20 @@ std::forward_list<Condition*> Player::getMuteConditions() const
 	return muteConditions;
 }
 
-void Player::setGuild(Guild* guild)
+void Player::setGuild(Guild_ptr guild)
 {
 	if (guild == this->guild) {
 		return;
 	}
 
-	Guild* oldGuild = this->guild;
+	auto oldGuild = this->guild;
 
 	this->guildNick.clear();
 	this->guild = nullptr;
 	this->guildRank = nullptr;
 
 	if (guild) {
-		GuildRank_ptr rank = guild->getRankByLevel(1);
+		const auto& rank = guild->getRankByLevel(Guild::MEMBER_RANK_LEVEL_DEFAULT);
 		if (!rank) {
 			return;
 		}

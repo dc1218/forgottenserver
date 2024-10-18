@@ -191,9 +191,9 @@ bool Actions::registerEvent(Event_ptr event, const pugi::xml_node& node)
 bool Actions::registerLuaEvent(Action* event)
 {
 	Action_ptr action{event};
-	if (!action->getItemIdRange().empty()) {
-		const auto& range = action->getItemIdRange();
-		for (auto id : range) {
+	if (isValid(ids, event)) {
+		const auto& range = getItemIdRange(event);
+		for (auto& id : range) {
 			auto result = useItemMap.emplace(id, *action);
 			if (!result.second) {
 				std::cout << "[Warning - Actions::registerLuaEvent] Duplicate registered item with id: " << id
@@ -201,9 +201,9 @@ bool Actions::registerLuaEvent(Action* event)
 			}
 		}
 		return true;
-	} else if (!action->getUniqueIdRange().empty()) {
-		const auto& range = action->getUniqueIdRange();
-		for (auto id : range) {
+	} else if (isValid(uids, event)) {
+		const auto& range = getUniqueIdRange(event);
+		for (auto& id : range) {
 			auto result = uniqueItemMap.emplace(id, *action);
 			if (!result.second) {
 				std::cout << "[Warning - Actions::registerLuaEvent] Duplicate registered item with uid: " << id
@@ -211,9 +211,9 @@ bool Actions::registerLuaEvent(Action* event)
 			}
 		}
 		return true;
-	} else if (!action->getActionIdRange().empty()) {
-		const auto& range = action->getActionIdRange();
-		for (auto id : range) {
+	} else if (isValid(aids, event)) {
+		const auto& range = getActionIdRange(event);
+		for (auto& id : range) {
 			auto result = actionItemMap.emplace(id, *action);
 			if (!result.second) {
 				std::cout << "[Warning - Actions::registerLuaEvent] Duplicate registered item with aid: " << id
@@ -557,27 +557,27 @@ bool Action::executeUse(Player* player, Item* item, const Position& fromPosition
                         const Position& toPosition, bool isHotkey)
 {
 	// onUse(player, item, fromPosition, target, toPosition, isHotkey)
-	if (!scriptInterface->reserveScriptEnv()) {
+	if (!tfs::lua::reserveScriptEnv()) {
 		std::cout << "[Error - Action::executeUse] Call stack overflow" << std::endl;
 		return false;
 	}
 
-	ScriptEnvironment* env = scriptInterface->getScriptEnv();
+	ScriptEnvironment* env = tfs::lua::getScriptEnv();
 	env->setScriptId(scriptId, scriptInterface);
 
 	lua_State* L = scriptInterface->getLuaState();
 
 	scriptInterface->pushFunction(scriptId);
 
-	LuaScriptInterface::pushUserdata<Player>(L, player);
-	LuaScriptInterface::setMetatable(L, -1, "Player");
+	tfs::lua::pushUserdata(L, player);
+	tfs::lua::setMetatable(L, -1, "Player");
 
-	LuaScriptInterface::pushThing(L, item);
-	LuaScriptInterface::pushPosition(L, fromPosition);
+	tfs::lua::pushThing(L, item);
+	tfs::lua::pushPosition(L, fromPosition);
 
-	LuaScriptInterface::pushThing(L, target);
-	LuaScriptInterface::pushPosition(L, toPosition);
+	tfs::lua::pushThing(L, target);
+	tfs::lua::pushPosition(L, toPosition);
 
-	LuaScriptInterface::pushBoolean(L, isHotkey);
+	tfs::lua::pushBoolean(L, isHotkey);
 	return scriptInterface->callFunction(6);
 }

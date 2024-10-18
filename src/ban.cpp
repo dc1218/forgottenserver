@@ -8,43 +8,10 @@
 #include "connection.h"
 #include "database.h"
 #include "databasetasks.h"
-#include "tools.h"
 
-bool Ban::acceptConnection(const Connection::Address& clientIP)
-{
-	std::lock_guard<std::recursive_mutex> lockClass(lock);
+namespace IOBan {
 
-	uint64_t currentTime = OTSYS_TIME();
-
-	auto it = ipConnectMap.find(clientIP);
-	if (it == ipConnectMap.end()) {
-		ipConnectMap.emplace(clientIP, ConnectBlock(currentTime, 0, 1));
-		return true;
-	}
-
-	ConnectBlock& connectBlock = it->second;
-	if (connectBlock.blockTime > currentTime) {
-		connectBlock.blockTime += 250;
-		return false;
-	}
-
-	int64_t timeDiff = currentTime - connectBlock.lastAttempt;
-	connectBlock.lastAttempt = currentTime;
-	if (timeDiff <= 5000) {
-		if (++connectBlock.count > 5) {
-			connectBlock.count = 0;
-			if (timeDiff <= 500) {
-				connectBlock.blockTime = currentTime + 3000;
-				return false;
-			}
-		}
-	} else {
-		connectBlock.count = 1;
-	}
-	return true;
-}
-
-const std::optional<BanInfo> IOBan::getAccountBanInfo(uint32_t accountId)
+const std::optional<BanInfo> getAccountBanInfo(uint32_t accountId)
 {
 	Database& db = Database::getInstance();
 
@@ -78,7 +45,7 @@ const std::optional<BanInfo> IOBan::getAccountBanInfo(uint32_t accountId)
 	return banInfo;
 }
 
-const std::optional<BanInfo> IOBan::getIpBanInfo(const Connection::Address& clientIP)
+const std::optional<BanInfo> getIpBanInfo(const Connection::Address& clientIP)
 {
 	if (clientIP.is_unspecified()) {
 		return std::nullopt;
@@ -112,9 +79,11 @@ const std::optional<BanInfo> IOBan::getIpBanInfo(const Connection::Address& clie
 	return banInfo;
 }
 
-bool IOBan::isPlayerNamelocked(uint32_t playerId)
+bool isPlayerNamelocked(uint32_t playerId)
 {
 	return Database::getInstance()
 	    .storeQuery(fmt::format("SELECT 1 FROM `player_namelocks` WHERE `player_id` = {:d}", playerId))
 	    .get();
 }
+
+} // namespace IOBan

@@ -81,9 +81,9 @@ function Player:onReportRuleViolation(targetName, reportType, reportReason, comm
 	end
 end
 
-function Player:onReportBug(message, position, category)
+function Player:onReportBug(message, position)
 	if hasEvent.onReportBug then
-		return Event.onReportBug(self, message, position, category)
+		return Event.onReportBug(self, message, position)
 	end
 	return true
 end
@@ -212,7 +212,7 @@ function Player:onPodiumEdit(item, outfit, direction, isVisible)
 end
 
 function Player:onGainExperience(source, exp, rawExp, sendText)
-	return hasEvent.onGainExperience and Event.onGainExperience(self, source, exp, rawExp) or exp
+	return hasEvent.onGainExperience and Event.onGainExperience(self, source, exp, rawExp, sendText) or exp
 end
 
 function Player:onLoseExperience(exp)
@@ -286,9 +286,8 @@ function Player:onNetworkMessage(recvByte, msg)
 end
 
 function Player:onSpellCheck(spell)
-	local onSpellCheck = EventCallback.onSpellCheck
-	if onSpellCheck then
-		return onSpellCheck(self, spell)
+	if hasEvent.onSpellCheck then
+		return Event.onSpellCheck(self, spell)
 	end
 	return true
 end
